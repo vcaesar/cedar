@@ -27,8 +27,8 @@ func isReduced(reduced ...bool) bool {
 	return true
 }
 
-func (cd *Cedar) get(key []byte, from, pos int) *int {
-	to := cd.getNode(key, from, pos)
+func (cd *Cedar) get(key []byte, from, pos int, reduced ...bool) *int {
+	to := cd.getNode(key, from, pos, reduced...)
 	return &cd.array[to].baseV
 }
 
@@ -110,12 +110,12 @@ func (cd *Cedar) Value(path int) (val int, err error) {
 }
 
 // Insert the key for the value
-func (cd *Cedar) Insert(key []byte, val int) error {
+func (cd *Cedar) Insert(key []byte, val int, reduced ...bool) error {
 	if val < 0 || val >= ValLimit {
 		return ErrInvalidVal
 	}
 
-	p := cd.get(key, 0, 0)
+	p := cd.get(key, 0, 0, reduced...)
 	*p = val
 
 	return nil
@@ -123,7 +123,7 @@ func (cd *Cedar) Insert(key []byte, val int) error {
 
 // Update the key for the value, it is public interface that works on &str
 func (cd *Cedar) Update(key []byte, value int, reduced ...bool) error {
-	p := cd.get(key, 0, 0)
+	p := cd.get(key, 0, 0, reduced...)
 
 	if *p == ValLimit && isReduced(reduced...) {
 		*p = value
@@ -137,7 +137,7 @@ func (cd *Cedar) Update(key []byte, value int, reduced ...bool) error {
 // Delete the key from the trie, the internal interface that works on &[u8]
 func (cd *Cedar) Delete(key []byte, reduced ...bool) error {
 	// move the cursor to the right place and use erase__ to delete it.
-	to, err := cd.Jump(key, 0)
+	to, err := cd.Jump(key, 0, reduced...)
 	if err != nil {
 		return ErrNoKey
 	}
@@ -182,8 +182,8 @@ func (cd *Cedar) Delete(key []byte, reduced ...bool) error {
 }
 
 // Get get the key value
-func (cd *Cedar) Get(key []byte) (value int, err error) {
-	to, err := cd.Jump(key, 0)
+func (cd *Cedar) Get(key []byte, reduced ...bool) (value int, err error) {
+	to, err := cd.Jump(key, 0, reduced...)
 	if err != nil {
 		return 0, err
 	}
