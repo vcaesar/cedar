@@ -4,10 +4,189 @@
 
 package cedar
 
+import (
+	"errors"
+)
+
+var (
+	// ErrNoKey not have key error
+	ErrNoKey = errors.New("cedar: not have key")
+	// ErrNoVal not have value error
+	ErrNoVal = errors.New("cedar: not have val")
+	// ErrInvalidKey invalid key error
+	ErrInvalidKey = errors.New("cedar: invalid key")
+	// ErrInvalidValue invalid value error
+	ErrInvalidVal = errors.New("cedar: invalid val")
+)
+
 func isReduced(reduced ...bool) bool {
 	if len(reduced) > 0 && !reduced[0] {
 		return false
 	}
 
 	return true
+}
+
+func (cd *Cedar) get(key []byte, from, pos int) *int {
+	to := cd.getNode(key, from, pos)
+	return &cd.array[to].baseV
+}
+
+// GetVal get follow node by key, split by update()
+func (cd *Cedar) getNode(key []byte, from, pos int, redched ...bool) int {
+	for ; pos < len(key); pos++ {
+		if isReduced(redched...) {
+			value := cd.array[from].baseV
+			if value >= 0 && value != ValLimit {
+				to := cd.follow(from, 0)
+				cd.array[to].baseV = value
+			}
+		}
+
+		from = cd.follow(from, key[pos])
+	}
+
+	to := from
+	if cd.array[from].baseV < 0 || !isReduced(redched...) {
+		to = cd.follow(from, 0)
+	}
+
+	return to
+}
+
+// Jump jump a node `from` to another node by following the `path`, split by find()
+func (cd *Cedar) Jump(key []byte, from int, reduced ...bool) (to int, err error) {
+	// pos := 0
+	// recursively matching the key.
+	for _, k := range key {
+		if cd.array[from].baseV >= 0 && isReduced(reduced...) {
+			return from, ErrNoKey
+		}
+
+		to = cd.array[from].base() ^ int(k)
+		if cd.array[to].check != from {
+			return from, ErrNoKey
+		}
+		from = to
+	}
+
+	return to, nil
+}
+
+// Find key from double array trie, with `from` as the cursor to traverse the nodes.
+func (cd *Cedar) Find(key []byte, from int, reduced ...bool) (int, error) {
+	to, err := cd.Jump(key, from, reduced...)
+	if isReduced(reduced...) {
+		if cd.array[from].baseV >= 0 {
+			if err == nil && to != 0 {
+				return cd.array[to].baseV, nil
+			}
+			return 0, ErrNoKey
+		}
+	}
+
+	// return the value of the node if `check` is correctly marked fpr the ownership,
+	// otherwise it means no value is stored.
+	n := cd.array[cd.array[to].base()]
+	if n.check != to {
+		return 0, ErrNoKey
+	}
+	return n.baseV, nil
+}
+
+// Value get the path value
+func (cd *Cedar) Value(path int) (val int, err error) {
+	val = cd.array[path].baseV
+	if val >= 0 {
+		return val, nil
+	}
+
+	to := cd.array[path].base()
+	if cd.array[to].check == path && cd.array[to].baseV >= 0 {
+		return cd.array[to].baseV, nil
+	}
+
+	return 0, ErrNoVal
+}
+
+// Insert the key for the value
+func (cd *Cedar) Insert(key []byte, val int) error {
+	if val < 0 || val >= ValLimit {
+		return ErrInvalidVal
+	}
+
+	p := cd.get(key, 0, 0)
+	*p = val
+
+	return nil
+}
+
+// Update the key for the value, it is public interface that works on &str
+func (cd *Cedar) Update(key []byte, value int, redched ...bool) error {
+	p := cd.get(key, 0, 0)
+
+	if *p == ValLimit && isReduced(redched...) {
+		*p = value
+		return nil
+	}
+
+	*p += value
+	return nil
+}
+
+// Delete the key from the trie, the internal interface that works on &[u8]
+func (cd *Cedar) Delete(key []byte, redched ...bool) error {
+	// move the cursor to the right place and use erase__ to delete it.
+	to, err := cd.Jump(key, 0)
+	if err != nil {
+		return ErrNoKey
+	}
+
+	if cd.array[to].baseV < 0 && isReduced(redched...) {
+		base := cd.array[to].base()
+		if cd.array[base].check == to {
+			to = base
+		}
+	}
+
+	if !isReduced(redched...) {
+		to = cd.array[to].base()
+	}
+
+	from := to
+	for to > 0 {
+		if isReduced(redched...) {
+			from = cd.array[to].check
+		}
+		base := cd.array[from].base()
+		label := byte(to ^ base)
+
+		hasSibling := cd.nInfos[to].sibling != 0 || cd.nInfos[from].child != label
+		// if the node has siblings, then remove `e` from the sibling.
+		if hasSibling {
+			cd.popSibling(from, base, label)
+		}
+
+		// maintain the data structures.
+		cd.pushENode(to)
+		// traverse to the parent.
+		to = from
+
+		// if it has sibling then this layer has more than one nodes, then we are done.
+		if hasSibling {
+			break
+		}
+	}
+
+	return nil
+}
+
+// Get get the key value
+func (cd *Cedar) Get(key []byte) (value int, err error) {
+	to, err := cd.Jump(key, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	return cd.Value(to)
 }
