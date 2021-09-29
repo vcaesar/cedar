@@ -32,10 +32,10 @@ func (cd *Cedar) get(key []byte, from, pos int) *int {
 	return &cd.array[to].baseV
 }
 
-// GetVal get follow node by key, split by update()
-func (cd *Cedar) getNode(key []byte, from, pos int, redched ...bool) int {
+// getNode get follow node by key, split by update()
+func (cd *Cedar) getNode(key []byte, from, pos int, reduced ...bool) int {
 	for ; pos < len(key); pos++ {
-		if isReduced(redched...) {
+		if isReduced(reduced...) {
 			value := cd.array[from].baseV
 			if value >= 0 && value != ValLimit {
 				to := cd.follow(from, 0)
@@ -47,7 +47,7 @@ func (cd *Cedar) getNode(key []byte, from, pos int, redched ...bool) int {
 	}
 
 	to := from
-	if cd.array[from].baseV < 0 || !isReduced(redched...) {
+	if cd.array[from].baseV < 0 || !isReduced(reduced...) {
 		to = cd.follow(from, 0)
 	}
 
@@ -122,10 +122,10 @@ func (cd *Cedar) Insert(key []byte, val int) error {
 }
 
 // Update the key for the value, it is public interface that works on &str
-func (cd *Cedar) Update(key []byte, value int, redched ...bool) error {
+func (cd *Cedar) Update(key []byte, value int, reduced ...bool) error {
 	p := cd.get(key, 0, 0)
 
-	if *p == ValLimit && isReduced(redched...) {
+	if *p == ValLimit && isReduced(reduced...) {
 		*p = value
 		return nil
 	}
@@ -135,27 +135,27 @@ func (cd *Cedar) Update(key []byte, value int, redched ...bool) error {
 }
 
 // Delete the key from the trie, the internal interface that works on &[u8]
-func (cd *Cedar) Delete(key []byte, redched ...bool) error {
+func (cd *Cedar) Delete(key []byte, reduced ...bool) error {
 	// move the cursor to the right place and use erase__ to delete it.
 	to, err := cd.Jump(key, 0)
 	if err != nil {
 		return ErrNoKey
 	}
 
-	if cd.array[to].baseV < 0 && isReduced(redched...) {
+	if cd.array[to].baseV < 0 && isReduced(reduced...) {
 		base := cd.array[to].base()
 		if cd.array[base].check == to {
 			to = base
 		}
 	}
 
-	if !isReduced(redched...) {
+	if !isReduced(reduced...) {
 		to = cd.array[to].base()
 	}
 
 	from := to
 	for to > 0 {
-		if isReduced(redched...) {
+		if isReduced(reduced...) {
 			from = cd.array[to].check
 		}
 		base := cd.array[from].base()
