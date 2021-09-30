@@ -58,10 +58,14 @@ func TestFind(t *testing.T) {
 	tt.Nil(t, err)
 	tt.Equal(t, 0, key)
 
-	to, err := cd.Jump([]byte("aa"), 0)
+	val, err := cd.Get([]byte("ab"))
 	tt.Nil(t, err)
-	tt.Equal(t, 353, to)
-	val, err := cd.Value(to)
+	tt.Equal(t, 2, val)
+
+	to, err := cd.Jump([]byte("abc"), 0)
 	tt.Nil(t, err)
-	tt.Equal(t, 1, val)
+	// tt.Equal(t, 353, to)
+	val, err = cd.Value(to)
+	tt.Nil(t, err)
+	tt.Equal(t, 4, val)
 }
