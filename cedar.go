@@ -62,7 +62,8 @@ type Cedar struct {
 const (
 	// ValLimit cedar value limit
 	ValLimit = int(^uint(0) >> 1)
-	NoVal    = -1
+	// NoVal not have value
+	NoVal = -1
 )
 
 // type PrefixIter struct {

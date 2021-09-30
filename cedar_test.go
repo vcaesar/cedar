@@ -51,7 +51,8 @@ func TestLoadData(t *testing.T) {
 
 func TestFind(t *testing.T) {
 	for i, word := range words {
-		cd.Insert([]byte(word), i)
+		err := cd.Insert([]byte(word), i)
+		tt.Nil(t, err)
 	}
 
 	key, err := cd.Find([]byte("a"), 0)
