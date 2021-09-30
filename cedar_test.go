@@ -48,3 +48,20 @@ func TestLoadData(t *testing.T) {
 		tt.Nil(t, err)
 	}
 }
+
+func TestFind(t *testing.T) {
+	for i, word := range words {
+		cd.Insert([]byte(word), i)
+	}
+
+	key, err := cd.Find([]byte("a"), 0)
+	tt.Nil(t, err)
+	tt.Equal(t, 0, key)
+
+	to, err := cd.Jump([]byte("aa"), 0)
+	tt.Nil(t, err)
+	tt.Equal(t, 353, to)
+	val, err := cd.Value(to)
+	tt.Nil(t, err)
+	tt.Equal(t, 1, val)
+}
