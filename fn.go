@@ -32,7 +32,7 @@ func (cd *Cedar) get(key []byte, from, pos int, reduced ...bool) *int {
 	return &cd.array[to].baseV
 }
 
-// getNode get follow node by key, split by update()
+// getNode get the follow node by key, split by update()
 func (cd *Cedar) getNode(key []byte, from, pos int, reduced ...bool) int {
 	for ; pos < len(key); pos++ {
 		if isReduced(reduced...) {

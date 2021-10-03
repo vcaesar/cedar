@@ -460,7 +460,7 @@ func (cd *Cedar) resolve(fromN, baseN int, labelN byte, reduced ...bool) int {
 		cd.array[from].baseV = -base - 1
 	}
 
-	base, labelN, toPn = cd.list(base, from, nbase, fromN, toPn,
+	base, labelN, toPn = cd.listN(base, from, nbase, fromN, toPn,
 		labelN, children, flag, reduced...)
 
 	// return the position that is free now.
@@ -471,7 +471,7 @@ func (cd *Cedar) resolve(fromN, baseN int, labelN byte, reduced ...bool) int {
 	return toPn
 }
 
-func (cd *Cedar) list(base, from, nbase, fromN, toPn int,
+func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
 	labelN byte, children []byte, flag bool, reduced ...bool) (int, byte, int) {
 	// the actual work for relocating the chilren
 	for i := 0; i < len(children); i++ {
