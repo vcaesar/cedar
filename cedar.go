@@ -44,6 +44,9 @@ func (b *Block) init() {
 
 // Cedar holds all of the information about double array trie.
 type Cedar struct {
+	// Reduced option the reduced trie
+	Reduced bool
+
 	array  []Node // storing the `base` and `check` info from the original paper.
 	nInfos []NInfo
 	blocks []Block
@@ -72,6 +75,8 @@ const (
 // New initialize the Cedar for further use
 func New(reduced ...bool) *Cedar {
 	cd := Cedar{
+		Reduced: isReduced(reduced...),
+
 		array:  make([]Node, 256),
 		nInfos: make([]NInfo, 256),
 		blocks: make([]Block, 1),
@@ -82,7 +87,7 @@ func New(reduced ...bool) *Cedar {
 		maxTrial: 1,
 	}
 
-	if !isReduced(reduced...) {
+	if !cd.Reduced {
 		cd.array[0] = Node{baseV: 0, check: -1}
 	} else {
 		cd.array[0] = Node{baseV: -1, check: -1}
@@ -108,7 +113,7 @@ func New(reduced ...bool) *Cedar {
 // follow To move in the trie by following the `label`, and insert the node if the node is not there,
 // it is used by the `update` to populate the trie.
 func (cd *Cedar) follow(from int, label byte) (to int) {
-	base := cd.array[from].base()
+	base := cd.array[from].base(cd.Reduced)
 
 	// the node is not there
 	to = base ^ int(label)
@@ -134,7 +139,7 @@ func (cd *Cedar) follow(from int, label byte) (to int) {
 
 // Mark an edge `e` as used in a trie node.
 // pop empty node from block; never transfer the special block (idx = 0)
-func (cd *Cedar) popENode(base, from int, label byte, reduced ...bool) int {
+func (cd *Cedar) popENode(base, from int, label byte) int {
 	e := base ^ int(label)
 	if base < 0 {
 		e = cd.findPlace()
@@ -167,7 +172,7 @@ func (cd *Cedar) popENode(base, from int, label byte, reduced ...bool) int {
 	}
 
 	// initialize the released node
-	if !isReduced(reduced...) {
+	if !cd.Reduced {
 		if label != 0 {
 			cd.array[e].baseV = -1
 		} else {
@@ -408,12 +413,12 @@ func (cd *Cedar) listEHead(b *Block, child []byte) int {
 
 // resolve the conflict by moving one of the the nodes to a free block.
 // resolve conflict on base_n ^ label_n = base_p ^ label_p
-func (cd *Cedar) resolve(fromN, baseN int, labelN byte, reduced ...bool) int {
+func (cd *Cedar) resolve(fromN, baseN int, labelN byte) int {
 	toPn := baseN ^ int(labelN)
 
 	// the `base` and `from` for the conflicting one.
 	fromP := cd.array[toPn].check
-	baseP := cd.array[fromP].base()
+	baseP := cd.array[fromP].base(cd.Reduced)
 
 	// whether to replace siblings of newly added
 	flag := cd.consult(
@@ -454,14 +459,14 @@ func (cd *Cedar) resolve(fromN, baseN int, labelN byte, reduced ...bool) int {
 	}
 
 	// #[cfg(feature != "reduced-trie")]
-	if !isReduced(reduced...) {
+	if !cd.Reduced {
 		cd.array[from].baseV = base
 	} else {
 		cd.array[from].baseV = -base - 1
 	}
 
 	base, labelN, toPn = cd.listN(base, from, nbase, fromN, toPn,
-		labelN, children, flag, reduced...)
+		labelN, children, flag)
 
 	// return the position that is free now.
 	if flag {
@@ -472,7 +477,7 @@ func (cd *Cedar) resolve(fromN, baseN int, labelN byte, reduced ...bool) int {
 }
 
 func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
-	labelN byte, children []byte, flag bool, reduced ...bool) (int, byte, int) {
+	labelN byte, children []byte, flag bool) (int, byte, int) {
 	// the actual work for relocating the chilren
 	for i := 0; i < len(children); i++ {
 		to := cd.popENode(base, from, children[i])
@@ -494,7 +499,7 @@ func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
 		arr.baseV = arrs.baseV
 
 		condition := false
-		if !isReduced(reduced...) {
+		if !cd.Reduced {
 			condition = arr.baseV > 0 && children[i] != 0
 		} else {
 			condition = arr.baseV < 0 && children[i] != 0
@@ -504,12 +509,12 @@ func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
 			// this node has children, fix their check
 			c := cd.nInfos[newTo].child
 			cd.nInfos[to].child = c
-			cd.array[arr.base()^int(c)].check = to
+			cd.array[arr.base(cd.Reduced)^int(c)].check = to
 
-			c = cd.nInfos[arr.base()^int(c)].sibling
+			c = cd.nInfos[arr.base(cd.Reduced)^int(c)].sibling
 			for c != 0 {
-				cd.array[arr.base()^int(c)].check = to
-				c = cd.nInfos[arr.base()^int(c)].sibling
+				cd.array[arr.base(cd.Reduced)^int(c)].check = to
+				c = cd.nInfos[arr.base(cd.Reduced)^int(c)].sibling
 			}
 		}
 
@@ -523,7 +528,7 @@ func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
 			cd.pushSibling(fromN, toPn^int(labelN), labelN, true)
 			cd.nInfos[newTo].child = 0
 
-			if !isReduced(reduced...) {
+			if !cd.Reduced {
 				if labelN != 0 {
 					arrs.baseV = -1
 				} else {

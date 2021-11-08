@@ -27,15 +27,15 @@ func isReduced(reduced ...bool) bool {
 	return true
 }
 
-func (cd *Cedar) get(key []byte, from, pos int, reduced ...bool) *int {
-	to := cd.getNode(key, from, pos, reduced...)
+func (cd *Cedar) get(key []byte, from, pos int) *int {
+	to := cd.getNode(key, from, pos)
 	return &cd.array[to].baseV
 }
 
 // getNode get the follow node by key, split by update()
-func (cd *Cedar) getNode(key []byte, from, pos int, reduced ...bool) int {
+func (cd *Cedar) getNode(key []byte, from, pos int) int {
 	for ; pos < len(key); pos++ {
-		if isReduced(reduced...) {
+		if cd.Reduced {
 			value := cd.array[from].baseV
 			if value >= 0 && value != ValLimit {
 				to := cd.follow(from, 0)
@@ -47,7 +47,7 @@ func (cd *Cedar) getNode(key []byte, from, pos int, reduced ...bool) int {
 	}
 
 	to := from
-	if cd.array[from].baseV < 0 || !isReduced(reduced...) {
+	if cd.array[from].baseV < 0 || !cd.Reduced {
 		to = cd.follow(from, 0)
 	}
 
@@ -55,15 +55,15 @@ func (cd *Cedar) getNode(key []byte, from, pos int, reduced ...bool) int {
 }
 
 // Jump jump a node `from` to another node by following the `path`, split by find()
-func (cd *Cedar) Jump(key []byte, from int, reduced ...bool) (to int, err error) {
+func (cd *Cedar) Jump(key []byte, from int) (to int, err error) {
 	// pos := 0
 	// recursively matching the key.
 	for _, k := range key {
-		if cd.array[from].baseV >= 0 && isReduced(reduced...) {
+		if cd.array[from].baseV >= 0 && cd.Reduced {
 			return from, ErrNoKey
 		}
 
-		to = cd.array[from].base() ^ int(k)
+		to = cd.array[from].base(cd.Reduced) ^ int(k)
 		if cd.array[to].check != from {
 			return from, ErrNoKey
 		}
@@ -74,9 +74,9 @@ func (cd *Cedar) Jump(key []byte, from int, reduced ...bool) (to int, err error)
 }
 
 // Find key from double array trie, with `from` as the cursor to traverse the nodes.
-func (cd *Cedar) Find(key []byte, from int, reduced ...bool) (int, error) {
-	to, err := cd.Jump(key, from, reduced...)
-	if isReduced(reduced...) {
+func (cd *Cedar) Find(key []byte, from int) (int, error) {
+	to, err := cd.Jump(key, from)
+	if cd.Reduced {
 		if cd.array[from].baseV >= 0 {
 			if err == nil && to != 0 {
 				return cd.array[to].baseV, nil
@@ -87,7 +87,7 @@ func (cd *Cedar) Find(key []byte, from int, reduced ...bool) (int, error) {
 
 	// return the value of the node if `check` is correctly marked fpr the ownership,
 	// otherwise it means no value is stored.
-	n := cd.array[cd.array[to].base()]
+	n := cd.array[cd.array[to].base(cd.Reduced)]
 	if n.check != to {
 		return 0, ErrNoKey
 	}
@@ -101,7 +101,7 @@ func (cd *Cedar) Value(path int) (val int, err error) {
 		return val, nil
 	}
 
-	to := cd.array[path].base()
+	to := cd.array[path].base(cd.Reduced)
 	if cd.array[to].check == path && cd.array[to].baseV >= 0 {
 		return cd.array[to].baseV, nil
 	}
@@ -109,23 +109,23 @@ func (cd *Cedar) Value(path int) (val int, err error) {
 	return 0, ErrNoVal
 }
 
-// Insert the key for the value
-func (cd *Cedar) Insert(key []byte, val int, reduced ...bool) error {
+// Insert the key for the value on []byte
+func (cd *Cedar) Insert(key []byte, val int) error {
 	if val < 0 || val >= ValLimit {
 		return ErrInvalidVal
 	}
 
-	p := cd.get(key, 0, 0, reduced...)
+	p := cd.get(key, 0, 0)
 	*p = val
 
 	return nil
 }
 
-// Update the key for the value, it is public interface that works on &str
-func (cd *Cedar) Update(key []byte, value int, reduced ...bool) error {
-	p := cd.get(key, 0, 0, reduced...)
+// Update the key for the value, it is public interface that works on []byte
+func (cd *Cedar) Update(key []byte, value int) error {
+	p := cd.get(key, 0, 0)
 
-	if *p == ValLimit && isReduced(reduced...) {
+	if *p == ValLimit && cd.Reduced {
 		*p = value
 		return nil
 	}
@@ -134,31 +134,31 @@ func (cd *Cedar) Update(key []byte, value int, reduced ...bool) error {
 	return nil
 }
 
-// Delete the key from the trie, the internal interface that works on &[u8]
-func (cd *Cedar) Delete(key []byte, reduced ...bool) error {
+// Delete the key from the trie, the internal interface that works on []byte
+func (cd *Cedar) Delete(key []byte) error {
 	// move the cursor to the right place and use erase__ to delete it.
-	to, err := cd.Jump(key, 0, reduced...)
+	to, err := cd.Jump(key, 0)
 	if err != nil {
 		return ErrNoKey
 	}
 
-	if cd.array[to].baseV < 0 && isReduced(reduced...) {
-		base := cd.array[to].base()
+	if cd.array[to].baseV < 0 && cd.Reduced {
+		base := cd.array[to].base(cd.Reduced)
 		if cd.array[base].check == to {
 			to = base
 		}
 	}
 
-	if !isReduced(reduced...) {
-		to = cd.array[to].base()
+	if !cd.Reduced {
+		to = cd.array[to].base(cd.Reduced)
 	}
 
 	from := to
 	for to > 0 {
-		if isReduced(reduced...) {
+		if cd.Reduced {
 			from = cd.array[to].check
 		}
-		base := cd.array[from].base()
+		base := cd.array[from].base(cd.Reduced)
 		label := byte(to ^ base)
 
 		hasSibling := cd.nInfos[to].sibling != 0 || cd.nInfos[from].child != label
@@ -182,8 +182,8 @@ func (cd *Cedar) Delete(key []byte, reduced ...bool) error {
 }
 
 // Get get the key value
-func (cd *Cedar) Get(key []byte, reduced ...bool) (value int, err error) {
-	to, err := cd.Jump(key, 0, reduced...)
+func (cd *Cedar) Get(key []byte) (value int, err error) {
+	to, err := cd.Jump(key, 0)
 	if err != nil {
 		return 0, err
 	}
