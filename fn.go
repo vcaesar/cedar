@@ -181,7 +181,7 @@ func (cd *Cedar) Delete(key []byte) error {
 	return nil
 }
 
-// Get get the key value
+// Get get the key value on []byte
 func (cd *Cedar) Get(key []byte) (value int, err error) {
 	to, err := cd.Jump(key, 0)
 	if err != nil {
@@ -189,4 +189,105 @@ func (cd *Cedar) Get(key []byte) (value int, err error) {
 	}
 
 	return cd.Value(to)
+}
+
+// ExactMatch to check if `key` is in the dictionary.
+func (cd *Cedar) ExactMatch(key []byte) (int, bool) {
+	from := 0
+	val, err := cd.Find(key, from)
+	if err != nil {
+		return 0, false
+	}
+	return val, true
+}
+
+// PrefixMatch return the collection of the common prefix
+// in the dictionary with the `key`
+func (cd *Cedar) PrefixMatch(key []byte, n ...int) (ids []int) {
+	num := 0
+	if len(n) > 0 {
+		num = n[0]
+	}
+
+	for from, i := 0, 0; i < len(key); i++ {
+		to, err := cd.Jump(key[i:i+1], from)
+		if err != nil {
+			break
+		}
+
+		_, err = cd.Value(to)
+		if err == nil {
+			ids = append(ids, to)
+			num--
+			if num == 0 {
+				return
+			}
+		}
+
+		from = to
+	}
+
+	return
+}
+
+// PrefixPredict eturn the list of words in the dictionary
+// that has `key` as their prefix
+func (cd *Cedar) PrefixPredict(key []byte, n ...int) (ids []int) {
+	num := 0
+	if len(n) > 0 {
+		num = n[0]
+	}
+
+	root, err := cd.Jump(key, 0)
+	if err != nil {
+		return
+	}
+
+	for from, err := cd.begin(root); err == nil; from, err = cd.next(from, root) {
+		ids = append(ids, from)
+		num--
+		if num == 0 {
+			return
+		}
+	}
+
+	return
+}
+
+// To get the cursor of the first leaf node starting by `from`
+func (cd *Cedar) begin(from int) (to int, err error) {
+	// recursively traversing down to look for the first leaf.
+	for c := cd.nInfos[from].child; c != 0; {
+		from = cd.array[from].base(cd.Reduced) ^ int(c)
+		c = cd.nInfos[from].child
+	}
+
+	if cd.array[from].base() > 0 {
+		return cd.array[from].base(), nil
+	}
+
+	// To return the value of the leaf.
+	return from, nil
+}
+
+// To move the cursor from one leaf to the next for the common prefix predict.
+func (cd *Cedar) next(from int, root int) (to int, err error) {
+	c := cd.nInfos[from].sibling
+	if !cd.Reduced {
+		c = cd.nInfos[cd.array[from].base(cd.Reduced)].sibling
+	}
+
+	// traversing up until there is a sibling or it has reached the root.
+	for c == 0 && from != root && cd.array[from].check >= 0 {
+		from = cd.array[from].check
+		c = cd.nInfos[from].sibling
+	}
+
+	if from == root || cd.array[from].check < 0 {
+		return 0, ErrNoKey
+	}
+
+	// it has a sibling so we leverage on `begin` to traverse the subtree down again.
+	from = cd.array[cd.array[from].check].base(cd.Reduced) ^ int(c)
+	return cd.begin(from)
 }
