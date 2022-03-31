@@ -77,7 +77,7 @@ func (cd *Cedar) Jump(key []byte, from int) (to int, err error) {
 func (cd *Cedar) Find(key []byte, from int) (int, error) {
 	to, err := cd.Jump(key, from)
 	if cd.Reduced {
-		if cd.array[from].baseV >= 0 {
+		if cd.array[to].baseV >= 0 {
 			if err == nil && to != 0 {
 				return cd.array[to].baseV, nil
 			}

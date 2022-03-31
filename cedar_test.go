@@ -14,7 +14,7 @@ var (
 		"a", "aa", "ab", "abc", "abcd", "abcdef",
 		"太阳系", "太阳系水星", "太阳系金星", "太阳系地球", "太阳系火星",
 		"太阳系木星", "太阳系土星", "太阳系天王星", "太阳系海王星",
-		"this", "this is", "this is a cedar.",
+		"this", "this is", "this is a cedar.", "CEMPAGA",
 	}
 )
 
@@ -62,6 +62,10 @@ func TestFind(t *testing.T) {
 	val, err = cd.Value(to)
 	tt.Nil(t, err)
 	tt.Equal(t, 3, val)
+
+	val, match := cd.ExactMatch([]byte("CEMPAGA"))
+	tt.Equal(t, 18, val)
+	tt.Equal(t, true, match)
 }
 
 func TestPrefixMatch(t *testing.T) {
