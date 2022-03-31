@@ -37,7 +37,9 @@ func main() {
 
 	fmt.Println(d.Jump([]byte("ab"), 0))
 	fmt.Println(d.Find([]byte("bc"), 0))
-	// fmt.Println(d.PrefixMatch([]byte("bc"), 0))
+
+	fmt.Println(d.PrefixMatch([]byte("bc"), 0))
+	fmt.Println(d.ExactMatch([]byte("ab")))
 }
 ```
 
