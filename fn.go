@@ -62,6 +62,9 @@ func (cd *Cedar) Jump(key []byte, from int) (to int, err error) {
 		if cd.array[from].baseV >= 0 && cd.Reduced {
 			return from, ErrNoKey
 		}
+		if cd.array[from].baseV < 0 && !cd.Reduced {
+			return from, ErrNoKey
+		}
 
 		to = cd.array[from].base(cd.Reduced) ^ int(k)
 		if cd.array[to].check != from {
@@ -85,9 +88,17 @@ func (cd *Cedar) Find(key []byte, from int) (int, error) {
 		}
 	}
 
+	if err != nil {
+		return 0, ErrNoKey
+	}
+
 	// return the value of the node if `check` is correctly marked fpr the ownership,
 	// otherwise it means no value is stored.
-	n := cd.array[cd.array[to].base(cd.Reduced)]
+	base := cd.array[to].base(cd.Reduced)
+	if base < 0 {
+		return 0, ErrNoKey
+	}
+	n := cd.array[base]
 	if n.check != to {
 		return 0, ErrNoKey
 	}
@@ -97,13 +108,25 @@ func (cd *Cedar) Find(key []byte, from int) (int, error) {
 // Value get the path value
 func (cd *Cedar) Value(path int) (val int, err error) {
 	val = cd.array[path].baseV
-	if val >= 0 {
+	if val >= 0 && cd.Reduced {
 		return val, nil
 	}
 
 	to := cd.array[path].base(cd.Reduced)
-	if cd.array[to].check == path && cd.array[to].baseV >= 0 {
+	if to >= 0 && to < len(cd.array) &&
+		cd.array[to].check == path && cd.array[to].baseV >= 0 {
 		return cd.array[to].baseV, nil
+	}
+
+	// For non-reduced: if this IS a terminal node (0-child), baseV is the stored value
+	if !cd.Reduced && val >= 0 {
+		from := cd.array[path].check
+		if from >= 0 {
+			base := cd.array[from].base(cd.Reduced)
+			if byte(path^base) == 0 {
+				return val, nil
+			}
+		}
 	}
 
 	return 0, ErrNoVal
@@ -155,9 +178,7 @@ func (cd *Cedar) Delete(key []byte) error {
 
 	from := to
 	for to > 0 {
-		if cd.Reduced {
-			from = cd.array[to].check
-		}
+		from = cd.array[to].check
 		base := cd.array[from].base(cd.Reduced)
 		label := byte(to ^ base)
 
@@ -262,8 +283,8 @@ func (cd *Cedar) begin(from int) (to int, err error) {
 		c = cd.nInfos[from].child
 	}
 
-	if cd.array[from].base() > 0 {
-		return cd.array[from].base(), nil
+	if cd.array[from].base(cd.Reduced) > 0 {
+		return cd.array[from].base(cd.Reduced), nil
 	}
 
 	// To return the value of the leaf.
@@ -273,9 +294,6 @@ func (cd *Cedar) begin(from int) (to int, err error) {
 // To move the cursor from one leaf to the next for the common prefix predict.
 func (cd *Cedar) next(from int, root int) (to int, err error) {
 	c := cd.nInfos[from].sibling
-	if !cd.Reduced {
-		c = cd.nInfos[cd.array[from].base(cd.Reduced)].sibling
-	}
 
 	// traversing up until there is a sibling or it has reached the root.
 	for c == 0 && from != root && cd.array[from].check >= 0 {
