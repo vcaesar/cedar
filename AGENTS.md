@@ -7,9 +7,12 @@ Module `github.com/vcaesar/cedar`, BSD-2, single package. Only dep: `github.com/
 
 - `cedar.go` — `Node`/`Block`/`NInfo`/`Cedar`, `New()`, block alloc, `follow`/`resolve` relocation
 - `fn.go` — public API (`Jump`, `Find`, `Value`, `Insert`, `Update`, `Delete`, `Get`, `ExactMatch`, `PrefixMatch`, `PrefixPredict`) and `Err*` sentinels
-- `aho.go` — stub only (Aho-Corasick not implemented)
-- `cedar_test.go`, `int32_test.go` — tests; `cedar_bm_test.go` — benchmarks, its `init()` builds the shared test trie
-- `examples/main.go` — usage demo
+- `io.go` — `GobEncode`/`GobDecode` and `MarshalJSON`/`UnmarshalJSON` on `Cedar`, both via the mirror struct `cedarData` (`toData`/`fromData`; `childBuf` is scratch and not persisted)
+- `aho.go` — empty root stub; the implementation is the `aho/` package
+- `aho/aho.go` — `Matcher` (Aho-Corasick over `*cedar.Cedar`): `Insert`/`Delete`, lazy `Compile` (BFS fail/output/depth links), `Match`/`Has`/`Key`; `aho/io.go` — `Save`/`Load` (`"gob"` or `"json"`, else `ErrDataType`) and channel `PrefixPredict`; `aho/graph.go` — `DumpGraph(fname)`/`WriteGraph(w)` emit Graphviz DOT (trie edges, terminal values, fail links except to root)
+- `aho/aho_test.go` — classic/NUL/recompile/save-load cases plus a random oracle vs naive search, both trie modes
+- `cedar_test.go`, `int32_test.go`, `io_test.go`, `oracle_test.go` — tests; `cedar_bm_test.go` — benchmarks, its `init()` builds the shared test trie
+- `examples/main.go` — trie usage demo; `examples/aho/main.go` — Aho-Corasick demo (match, delete, save/load, PrefixPredict, DumpGraph)
 
 ## Commands
 
@@ -29,6 +32,8 @@ gofmt -l . && go vet ./...
 - Size invariants: `Node` 8 bytes, `Block` 24 bytes (`TestNodeSize`). Block/head indexes are `int32`.
 - `Node.base(reduced bool)` is non-variadic and hot; keep it inlinable.
 - `setChild` returns a slice aliasing `cd.childBuf` — valid only until the next call.
+- `Children(from, dst)` skips the terminal (label 0) edge; the root's terminal slot is the root itself (base 0), so its chain starts at `nInfos[0].sibling`. `Size()` bounds node indexes.
+- `aho`: patterns must not contain NUL (rejected with `ErrInvalidKey`); NUL in text resets the automaton. Any mutation or `Load` clears `compiled`.
 - Keep algorithm comments accurate to the C++ cedar semantics.
 
 ## Test pitfalls

@@ -45,6 +45,60 @@ func main() {
 }
 ```
 
+### Aho-Corasick
+
+Package `aho` builds an Aho-Corasick automaton on top of the trie for
+multi-pattern search. Patterns can be inserted and deleted at any time; the
+failure links are rebuilt lazily on the next `Match`.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/vcaesar/cedar/aho"
+)
+
+func main() {
+	// NewStrings uses the pattern index as its value,
+	// or Insert patterns with your own values.
+	m := aho.NewStrings("he", "she", "his", "hers")
+	m.Insert([]byte("太阳系"), 100)
+
+	text := []byte("ushers 太阳系")
+	fmt.Println(m.Has(text))
+	for _, t := range m.Match(text) {
+		fmt.Printf("value=%d at=%d len=%d key=%q\n", t.Value, t.At, t.Len, m.Key(text, t))
+	}
+
+	// persist the trie as "gob" or "json"
+	m.SaveToFile("patterns.json", "json")
+	loaded := aho.New()
+	loaded.LoadFromFile("patterns.json", "json")
+
+	// stream the node ids of the patterns starting with "h"
+	for id := range loaded.PrefixPredict([]byte("h"), 0, 4) {
+		fmt.Println(loaded.Cedar().Value(id))
+	}
+
+	// visualise: dot -Tsvg trie.gv -o trie.svg
+	loaded.DumpGraph("trie.gv")
+}
+```
+
+Output:
+
+```
+true
+value=1 at=1 len=3 key="she"
+value=0 at=2 len=2 key="he"
+value=3 at=2 len=4 key="hers"
+value=100 at=7 len=9 key="太阳系"
+```
+
+See [examples/aho](examples/aho/main.go) for the full demo (`go run ./examples/aho`).
+
 ## License
 
 This is released under the BSD-2 license, following the original license of C++ cedar.

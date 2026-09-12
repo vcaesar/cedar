@@ -17,6 +17,8 @@ var (
 	ErrInvalidKey = errors.New("cedar: invalid key")
 	// ErrInvalidVal invalid value error
 	ErrInvalidVal = errors.New("cedar: invalid val")
+	// ErrInvalidData malformed serialized trie error
+	ErrInvalidData = errors.New("cedar: invalid data")
 )
 
 func isReduced(reduced ...bool) bool {
@@ -293,6 +295,37 @@ func (cd *Cedar) PrefixPredict(key []byte, n ...int) (ids []int) {
 	}
 
 	return
+}
+
+// Size returns the length of the double array; every node index is below it.
+func (cd *Cedar) Size() int {
+	return cd.size
+}
+
+// Children appends the labels of the edges leaving node `from` to dst, in
+// sibling-chain order, skipping the terminal edge (label 0).
+// Follow an edge with Jump.
+func (cd *Cedar) Children(from int, dst []byte) []byte {
+	base := cd.array[from].base(cd.Reduced)
+	if base < 0 {
+		return dst
+	}
+
+	c := cd.nInfos[from].child
+	if c == 0 {
+		// the chain starts at the terminal slot: either a real 0-child, or the
+		// node itself when base == from (the root); otherwise no children.
+		if base != from && int(cd.array[base].check) != from {
+			return dst
+		}
+		c = cd.nInfos[base].sibling
+	}
+
+	for ; c != 0; c = cd.nInfos[base^int(c)].sibling {
+		dst = append(dst, c)
+	}
+
+	return dst
 }
 
 // To get the cursor of the first leaf node starting by `from`

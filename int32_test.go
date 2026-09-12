@@ -137,3 +137,40 @@ func TestManyKeys(t *testing.T) {
 		}
 	}
 }
+
+// Children must skip the terminal edge, handle the root (whose terminal slot
+// is the root itself) and stay correct after deletes.
+func TestChildren(t *testing.T) {
+	for _, reduced := range []bool{true, false} {
+		cd := New(reduced)
+		tt.Equal(t, 256, cd.Size())
+		tt.Equal(t, 0, len(cd.Children(0, nil)))
+
+		for i, k := range []string{"a", "ab", "ac", "b"} {
+			tt.Nil(t, cd.Insert([]byte(k), i))
+		}
+		tt.Equal(t, []byte("ab"), cd.Children(0, nil))
+
+		a, err := cd.Jump([]byte("a"), 0)
+		tt.Nil(t, err)
+		tt.Equal(t, []byte("bc"), cd.Children(a, nil))
+
+		ab, err := cd.Jump([]byte("b"), a)
+		tt.Nil(t, err)
+		tt.Equal(t, 0, len(cd.Children(ab, nil)))
+
+		// append into a caller-owned buffer
+		buf := []byte{'x'}
+		tt.Equal(t, []byte("xbc"), cd.Children(a, buf))
+
+		tt.Nil(t, cd.Delete([]byte("ab")))
+		tt.Nil(t, cd.Delete([]byte("b")))
+		tt.Equal(t, []byte("a"), cd.Children(0, nil))
+		tt.Equal(t, []byte("c"), cd.Children(a, nil))
+
+		tt.Nil(t, cd.Delete([]byte("ac")))
+		tt.Nil(t, cd.Delete([]byte("a")))
+		tt.Equal(t, 0, len(cd.Children(0, nil)))
+		tt.Bool(t, cd.Size() >= 256)
+	}
+}
