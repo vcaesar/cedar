@@ -4,6 +4,8 @@
 
 package cedar
 
+import "math"
+
 // NInfo stores the information about the trie
 type NInfo struct {
 	sibling, child byte // uint8
@@ -13,28 +15,32 @@ type NInfo struct {
 // "An efficient implementation of trie structures"
 // https://dl.acm.org/citation.cfm?id=146691
 type Node struct {
-	baseV, check int // int32
+	baseV, check int32 // int
 }
 
-func (n *Node) base(reduced ...bool) int {
-	if !isReduced(reduced...) {
-		return n.baseV
+// base returns the base offset of the node; `reduced` selects the encoding used
+// by the reduced trie. It is non-variadic on purpose: it sits on the hot path
+// of every lookup and insert.
+func (n *Node) base(reduced bool) int {
+	if !reduced {
+		return int(n.baseV)
 	}
 
-	return -(n.baseV + 1)
+	return -(int(n.baseV) + 1)
 }
 
 // Block stores the linked-list pointers and the stats info for blocks.
 //
-// Because of type conversion, this version all int16 and int32 uses int,
-// witch will be optimized in the next version.
+// All fields fit in int32 (block indexes are < 2^24, counters are <= 257,
+// and eHead is a node index which is bounded by ValLimit), which halves the
+// per-block footprint compared to int.
 type Block struct {
-	prev   int // int32   // previous block's index, 3 bytes width
-	next   int // next block's index, 3 bytes width
-	num    int // the number of slots that is free, the range is 0-256
-	reject int // a heuristic number to make the search for free space faster...
-	trial  int // the number of times this block has been probed by `find_places` for the free block.
-	eHead  int // the index of the first empty elemenet in this block
+	prev   int32 // previous block's index, 3 bytes width
+	next   int32 // next block's index, 3 bytes width
+	num    int32 // the number of slots that is free, the range is 0-256
+	reject int32 // a heuristic number to make the search for free space faster...
+	trial  int32 // the number of times this block has been probed by `find_places` for the free block.
+	eHead  int32 // the index of the first empty elemenet in this block
 }
 
 func (b *Block) init() {
@@ -50,21 +56,24 @@ type Cedar struct {
 	array  []Node // storing the `base` and `check` info from the original paper.
 	nInfos []NInfo
 	blocks []Block
-	reject [257]int
+	reject [257]int32
 
-	blocksHeadFull   int // the index of the first 'Full' block, 0 means no 'Full' block
-	blocksHeadClosed int // the index of the first 'Closed' block, 0 means no ' Closed' block
-	blocksHeadOpen   int // the index of the first 'Open' block, 0 means no 'Open' block
+	blocksHeadFull   int32 // the index of the first 'Full' block, 0 means no 'Full' block
+	blocksHeadClosed int32 // the index of the first 'Closed' block, 0 means no ' Closed' block
+	blocksHeadOpen   int32 // the index of the first 'Open' block, 0 means no 'Open' block
 
 	capacity int
 	size     int
 	ordered  bool
-	maxTrial int // the parameter for cedar, it could be tuned for more, but the default is 1.
+	maxTrial int32 // the parameter for cedar, it could be tuned for more, but the default is 1.
+
+	// scratch buffer reused by setChild/resolve so relocations do not allocate.
+	childBuf [257]byte
 }
 
 const (
-	// ValLimit cedar value limit
-	ValLimit = int(^uint(0) >> 1)
+	// ValLimit cedar value limit, the values are stored as int32
+	ValLimit = math.MaxInt32
 	// NoVal not have value
 	NoVal = -1
 )
@@ -93,7 +102,7 @@ func New(reduced ...bool) *Cedar {
 		cd.array[0] = Node{baseV: -1, check: -1}
 	}
 	// make `baseV` point to the previous element, and make `check` point to the next element
-	for i := 1; i < 256; i++ {
+	for i := int32(1); i < 256; i++ {
 		cd.array[i] = Node{baseV: -(i - 1), check: -(i + 1)}
 	}
 	// make them link as a cyclic doubly-linked list
@@ -103,8 +112,8 @@ func New(reduced ...bool) *Cedar {
 	cd.blocks[0].eHead = 1
 	cd.blocks[0].init()
 
-	for i := 0; i <= 256; i++ {
-		cd.reject[i] = i + 1
+	for i := range cd.reject {
+		cd.reject[i] = int32(i + 1)
 	}
 
 	return &cd
@@ -129,7 +138,7 @@ func (cd *Cedar) follow(from int, label byte) (to int) {
 
 	// the node is already there and the ownership is not `from`,
 	// therefore a conflict.
-	if cd.array[to].check != from {
+	if int(cd.array[to].check) != from {
 		// call `resolve` to relocate.
 		to = cd.resolve(from, base, label)
 	}
@@ -145,7 +154,7 @@ func (cd *Cedar) popENode(base, from int, label byte) int {
 		e = cd.findPlace()
 	}
 
-	idx := e >> 8
+	idx := int32(e >> 8)
 	arr := &cd.array[e]
 
 	b := &cd.blocks[idx]
@@ -161,7 +170,7 @@ func (cd *Cedar) popENode(base, from int, label byte) int {
 		cd.array[-arr.baseV].check = arr.check
 		cd.array[-arr.check].baseV = arr.baseV
 
-		if e == b.eHead {
+		if int32(e) == b.eHead {
 			b.eHead = -arr.check
 		}
 
@@ -178,18 +187,18 @@ func (cd *Cedar) popENode(base, from int, label byte) int {
 		} else {
 			cd.array[e].baseV = 0
 		}
-		cd.array[e].check = from
+		cd.array[e].check = int32(from)
 		if base < 0 {
-			cd.array[from].baseV = e ^ int(label)
+			cd.array[from].baseV = int32(e ^ int(label))
 		}
 
 		return e
 	}
 
 	cd.array[e].baseV = ValLimit
-	cd.array[e].check = from
+	cd.array[e].check = int32(from)
 	if base < 0 {
-		cd.array[from].baseV = -(e ^ int(label)) - 1
+		cd.array[from].baseV = int32(-(e ^ int(label)) - 1)
 	}
 
 	return e
@@ -198,13 +207,13 @@ func (cd *Cedar) popENode(base, from int, label byte) int {
 // Mark an edge `e` as free in a trie node.
 // push empty node into empty ring
 func (cd *Cedar) pushENode(e int) {
-	idx := e >> 8
+	idx := int32(e >> 8)
 	b := &cd.blocks[idx]
 	b.num++
 
 	if b.num == 1 {
-		b.eHead = e
-		cd.array[e] = Node{baseV: -e, check: -e}
+		b.eHead = int32(e)
+		cd.array[e] = Node{baseV: int32(-e), check: int32(-e)}
 
 		if idx != 0 {
 			// Move the block from 'Full' to 'Closed' since it has one free slot now.
@@ -217,8 +226,8 @@ func (cd *Cedar) pushENode(e int) {
 		// Insert to the edge immediately after the e_head
 		cd.array[e] = Node{baseV: -prev, check: -next}
 
-		cd.array[prev].check = -e
-		cd.array[next].baseV = -e
+		cd.array[prev].check = int32(-e)
+		cd.array[next].baseV = int32(-e)
 
 		// Move the block from 'Closed' to 'Open' since it has more than one free slot now.
 		if b.num == 2 || b.trial == cd.maxTrial {
@@ -291,9 +300,11 @@ func (cd *Cedar) consult(baseN, baseP int, cN, cP byte) bool {
 }
 
 // Collect the list of the children, and push the label as well if it is not terminal node.
-// enumerate (equal to or more than one) child nodes
+// enumerate (equal to or more than one) child nodes.
+//
+// The result aliases cd.childBuf and is only valid until the next call.
 func (cd *Cedar) setChild(base int, c, label byte, flag bool) []byte {
-	child := make([]byte, 0, 257)
+	child := cd.childBuf[:0]
 	// 0: terminal
 	if c == 0 {
 		child = append(child, c)
@@ -322,11 +333,11 @@ func (cd *Cedar) setChild(base int, c, label byte, flag bool) []byte {
 // For the case where only one free slot is needed
 func (cd *Cedar) findPlace() int {
 	if cd.blocksHeadClosed != 0 {
-		return cd.blocks[cd.blocksHeadClosed].eHead
+		return int(cd.blocks[cd.blocksHeadClosed].eHead)
 	}
 
 	if cd.blocksHeadOpen != 0 {
-		return cd.blocks[cd.blocksHeadOpen].eHead
+		return int(cd.blocks[cd.blocksHeadOpen].eHead)
 	}
 
 	// the block is not enough, resize it and allocate it.
@@ -347,8 +358,8 @@ func (cd *Cedar) findPlaces(child []byte) int {
 	return cd.addBlock() << 8
 }
 
-func (cd *Cedar) listIdx(idx int, child []byte) int {
-	n := len(child)
+func (cd *Cedar) listIdx(idx int32, child []byte) int {
+	n := int32(len(child))
 	bo := cd.blocks[cd.blocksHeadOpen].prev
 
 	// only proceed if the free slots are more than the number of children. Also, we
@@ -390,20 +401,22 @@ func (cd *Cedar) listIdx(idx int, child []byte) int {
 }
 
 func (cd *Cedar) listEHead(b *Block, child []byte) int {
-	for e := b.eHead; ; {
+	arr := cd.array
+	last := len(child) - 1
+	for e := int(b.eHead); ; {
 		base := e ^ int(child[0])
 		// iterate through the children to see if they are available: (check < 0)
-		for i := 0; cd.array[base^int(child[i])].check < 0; i++ {
-			if i == len(child)-1 {
+		for i := 0; arr[base^int(child[i])].check < 0; i++ {
+			if i == last {
 				// we have found the available block.
-				b.eHead = e
+				b.eHead = int32(e)
 				return e
 			}
 		}
 
 		// save the next free block's information in `check`
-		e = -cd.array[e].check
-		if e == b.eHead {
+		e = int(-arr[e].check)
+		if int32(e) == b.eHead {
 			break
 		}
 	}
@@ -417,7 +430,7 @@ func (cd *Cedar) resolve(fromN, baseN int, labelN byte) int {
 	toPn := baseN ^ int(labelN)
 
 	// the `base` and `from` for the conflicting one.
-	fromP := cd.array[toPn].check
+	fromP := int(cd.array[toPn].check)
 	baseP := cd.array[fromP].base(cd.Reduced)
 
 	// whether to replace siblings of newly added
@@ -460,9 +473,9 @@ func (cd *Cedar) resolve(fromN, baseN int, labelN byte) int {
 
 	// #[cfg(feature != "reduced-trie")]
 	if !cd.Reduced {
-		cd.array[from].baseV = base
+		cd.array[from].baseV = int32(base)
 	} else {
-		cd.array[from].baseV = -base - 1
+		cd.array[from].baseV = int32(-base - 1)
 	}
 
 	base, labelN, toPn = cd.listN(base, from, nbase, fromN, toPn,
@@ -507,14 +520,15 @@ func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
 
 		if condition {
 			// this node has children, fix their check
+			ab := arr.base(cd.Reduced)
 			c := cd.nInfos[newTo].child
 			cd.nInfos[to].child = c
-			cd.array[arr.base(cd.Reduced)^int(c)].check = to
+			cd.array[ab^int(c)].check = int32(to)
 
-			c = cd.nInfos[arr.base(cd.Reduced)^int(c)].sibling
+			c = cd.nInfos[ab^int(c)].sibling
 			for c != 0 {
-				cd.array[arr.base(cd.Reduced)^int(c)].check = to
-				c = cd.nInfos[arr.base(cd.Reduced)^int(c)].sibling
+				cd.array[ab^int(c)].check = int32(to)
+				c = cd.nInfos[ab^int(c)].sibling
 			}
 		}
 
@@ -537,7 +551,7 @@ func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
 			} else {
 				arrs.baseV = ValLimit
 			}
-			arrs.check = fromN
+			arrs.check = int32(fromN)
 		} else {
 			cd.pushENode(newTo)
 		}
@@ -548,7 +562,7 @@ func (cd *Cedar) listN(base, from, nbase, fromN, toPn int,
 
 // pop a block at idx from the linked-list of type `from`, specially handled if it is the last
 // one in the linked-list.
-func (cd *Cedar) popBlock(idx int, from *int, last bool) {
+func (cd *Cedar) popBlock(idx int32, from *int32, last bool) {
 	if last {
 		*from = 0
 		return
@@ -564,7 +578,7 @@ func (cd *Cedar) popBlock(idx int, from *int, last bool) {
 
 // return the block at idx to the linked-list of `to`, specially handled
 // if the linked-list is empty
-func (cd *Cedar) pushBlock(idx int, to *int, empty bool) {
+func (cd *Cedar) pushBlock(idx int32, to *int32, empty bool) {
 	b := &cd.blocks[idx]
 	if empty {
 		*to, b.prev, b.next = idx, idx, idx
@@ -595,26 +609,29 @@ func (cd *Cedar) addBlock() int {
 		copy(cd.blocks, blocks)
 	}
 
-	cd.blocks[cd.size>>8].init()
-	cd.blocks[cd.size>>8].eHead = cd.size
+	idx := int32(cd.size >> 8)
+	cd.blocks[idx].init()
+	cd.blocks[idx].eHead = int32(cd.size)
 
 	// make it a doubley linked list
-	cd.array[cd.size] = Node{baseV: -(cd.size + 255), check: -(cd.size + 1)}
-	for i := cd.size + 1; i < cd.size+255; i++ {
+	size := int32(cd.size)
+	cd.array[size] = Node{baseV: -(size + 255), check: -(size + 1)}
+	for i := size + 1; i < size+255; i++ {
 		cd.array[i] = Node{baseV: -(i - 1), check: -(i + 1)}
 	}
-	cd.array[cd.size+255] = Node{baseV: -(cd.size + 254), check: -cd.size}
+	cd.array[size+255] = Node{baseV: -(size + 254), check: -size}
 
 	// append to block Open
-	cd.pushBlock(cd.size>>8, &cd.blocksHeadOpen, cd.blocksHeadOpen == 0)
+	cd.pushBlock(idx, &cd.blocksHeadOpen, cd.blocksHeadOpen == 0)
 	cd.size += 256
-	return cd.size>>8 - 1
+	return int(idx)
 }
 
 // transfer the block at idx from the linked-list of `from` to the linked-list of `to`,
 // specially handle the case where the destination linked-list is empty.
-func (cd *Cedar) transferBlock(idx int, from, to *int) {
-	b := cd.blocks[idx]
-	cd.popBlock(idx, from, idx == b.next) // b.next it's the last one if the next points to itself
-	cd.pushBlock(idx, to, *to == 0 && b.num != 0)
+func (cd *Cedar) transferBlock(idx int32, from, to *int32) {
+	b := &cd.blocks[idx]
+	last, num := idx == b.next, b.num // b.next it's the last one if the next points to itself
+	cd.popBlock(idx, from, last)
+	cd.pushBlock(idx, to, *to == 0 && num != 0)
 }
