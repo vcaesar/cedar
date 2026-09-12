@@ -1,21 +1,20 @@
 # cedar
 
-[![Build Status](https://github.com/vcaesar/cedar/workflows/Go/badge.svg)](https://github.com/vcaesar/cedar/commits/master)
-[![Build Status](https://travis-ci.org/vcaesar/cedar.svg)](https://travis-ci.org/vcaesar/cedar)
-[![CircleCI Status](https://circleci.com/gh/vcaesar/cedar.svg?style=shield)](https://circleci.com/gh/vcaesar/cedar)
-[![codecov](https://codecov.io/gh/vcaesar/cedar/branch/master/graph/badge.svg)](https://codecov.io/gh/vcaesar/cedar)
+[![Build Status](https://github.com/vcaesar/cedar/actions/workflows/go.yml/badge.svg)](https://github.com/vcaesar/cedar/actions/workflows/go.yml)
+[![CircleCI Status](https://dl.circleci.com/status-badge/img/gh/vcaesar/cedar/tree/main.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/vcaesar/cedar/tree/main)
+[![codecov](https://codecov.io/gh/vcaesar/cedar/branch/main/graph/badge.svg)](https://codecov.io/gh/vcaesar/cedar)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vcaesar/cedar)](https://goreportcard.com/report/github.com/vcaesar/cedar)
-[![GoDoc](https://godoc.org/github.com/vcaesar/cedar?status.svg)](https://godoc.org/github.com/vcaesar/cedar)
-[![Release](https://github-release-version.herokuapp.com/github/vcaesar/cedar/release.svg?style=flat)](https://github.com/vcaesar/cedar/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/vcaesar/cedar.svg)](https://pkg.go.dev/github.com/vcaesar/cedar)
+[![Release](https://img.shields.io/github/v/release/vcaesar/cedar)](https://github.com/vcaesar/cedar/releases/latest)
 <!-- [![Join the chat at https://gitter.im/go-ego/ego](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/go-ego/ego?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) -->
 
-Package `cedar` implementes double-array trie and aho corasick
+Package `cedar` implements an updatable double-array trie.
 
-It is implements the [cedar](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/cedar) and [paper](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/papers/ynaga-coling2014.pdf) by golang.
+It is a Go port of [cedar](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/cedar) (see the [paper](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/papers/ynaga-coling2014.pdf)).
 
 ## Install
 ```
-go get -u github.com/vcaesar/cedar
+go get github.com/vcaesar/cedar
 ```
 
 ## Usage

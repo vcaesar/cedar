@@ -4,6 +4,8 @@
 .idea
 
 examples/examples
+.v0
+.codg
 
 # Binaries for programs and plugins
 *.exe

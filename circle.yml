@@ -1,18 +1,22 @@
-version: 2
+version: 2.1
+
+orbs:
+  codecov: codecov/codecov@6
 
 jobs:
   build:
     docker:
-      - image: golang:1.26.0
-    working_directory: /gopath/src/github.com/vcaesar/cedar
+      - image: golang:1.27
     steps:
       - checkout
-      # - run:
-      #     name: "Build & Test"
-      #     command: make dev
-      # specify any bash command here prefixed with `run: `
-      - run: go get -v -t -d ./...
-      - run: go test -v ./...
-      # codecov.io
-      - run: go test -v -covermode=count -coverprofile=coverage.out
-      - run: bash <(curl -s https://codecov.io/bash)
+      - run: go mod download
+      - run: go vet ./...
+      - run: go build -v ./...
+      - run: go test -v -race -covermode=atomic -coverprofile=coverage.out ./...
+      - codecov/upload:
+          files: coverage.out
+
+workflows:
+  build:
+    jobs:
+      - build

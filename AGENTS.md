@@ -14,7 +14,7 @@ Module `github.com/vcaesar/cedar`, BSD-2, single package. Only dep: `github.com/
 ## Commands
 
 ```sh
-go build -v . && go test -v ./...        # CI (go.mod 1.17; CI pins 1.26.0)
+go vet ./... && go build -v ./... && go test -v -race ./...   # CI (go.mod 1.17; CI pins 1.27.x)
 go test -bench . -run '^$' -benchmem .
 gofmt -l . && go vet ./...
 ```
