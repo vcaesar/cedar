@@ -6,18 +6,21 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/vcaesar/cedar)](https://goreportcard.com/report/github.com/vcaesar/cedar)
 [![Go Reference](https://pkg.go.dev/badge/github.com/vcaesar/cedar.svg)](https://pkg.go.dev/github.com/vcaesar/cedar)
 [![Release](https://img.shields.io/github/v/release/vcaesar/cedar)](https://github.com/vcaesar/cedar/releases/latest)
+
 <!-- [![Join the chat at https://gitter.im/go-ego/ego](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/go-ego/ego?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) -->
 
-Package `cedar` implements an updatable double-array trie.
+Package `cedar` implements an updatable double-array trie and aho corasick.
 
 It is a Go port of [cedar](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/cedar) (see the [paper](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/papers/ynaga-coling2014.pdf)).
 
 ## Install
+
 ```
 go get github.com/vcaesar/cedar
 ```
 
 ## Usage
+
 ```go
 package main
 
@@ -48,4 +51,4 @@ This is released under the BSD-2 license, following the original license of C++ 
 
 ## Reference
 
-* [cedar - C++ implementation of efficiently-updatable double-array trie](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/cedar/), and thanks for [cedarwood](https://github.com/MnO2/cedarwood).
+- [cedar - C++ implementation of efficiently-updatable double-array trie](http://www.tkl.iis.u-tokyo.ac.jp/~ynaga/cedar/), and thanks for [cedarwood](https://github.com/MnO2/cedarwood).
