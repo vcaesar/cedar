@@ -148,8 +148,13 @@ func (cd *Cedar) Value(path int) (val int, err error) {
 	return 0, ErrNoVal
 }
 
-// Insert the key for the value on []byte
+// Insert the key for the value on []byte; an empty key is ErrInvalidKey
 func (cd *Cedar) Insert(key []byte, val int) error {
+	// the root's terminal slot is the root itself, a value there
+	// would overwrite the root's base and lose every key
+	if len(key) == 0 {
+		return ErrInvalidKey
+	}
 	if val < 0 || val >= ValLimit {
 		return ErrInvalidVal
 	}
@@ -160,8 +165,12 @@ func (cd *Cedar) Insert(key []byte, val int) error {
 	return nil
 }
 
-// Update the key for the value, it is public interface that works on []byte
+// Update the key for the value, it is public interface that works on []byte;
+// an empty key is ErrInvalidKey
 func (cd *Cedar) Update(key []byte, value int) error {
+	if len(key) == 0 {
+		return ErrInvalidKey
+	}
 	p := cd.get(key, 0, 0)
 
 	cur := int(*p)
@@ -183,7 +192,7 @@ func (cd *Cedar) Update(key []byte, value int) error {
 func (cd *Cedar) Delete(key []byte) error {
 	// move the cursor to the right place and use erase__ to delete it.
 	to, err := cd.Jump(key, 0)
-	if err != nil {
+	if err != nil || len(key) == 0 {
 		return ErrNoKey
 	}
 

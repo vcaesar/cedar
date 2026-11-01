@@ -75,6 +75,31 @@ func TestWideSiblingRelocation(t *testing.T) {
 	}
 }
 
+// the root's terminal slot is the root itself; an empty key must be
+// rejected instead of overwriting the root and losing every key
+func TestEmptyKey(t *testing.T) {
+	for _, reduced := range []bool{true, false} {
+		cd := New(reduced)
+		tt.Nil(t, cd.Insert([]byte("ab"), 1))
+
+		tt.Equal(t, ErrInvalidKey, cd.Insert(nil, 2))
+		tt.Equal(t, ErrInvalidKey, cd.Insert([]byte{}, 2))
+		tt.Equal(t, ErrInvalidKey, cd.Update(nil, 2))
+		tt.Equal(t, ErrNoKey, cd.Delete(nil))
+
+		v, err := cd.Get([]byte("ab"))
+		tt.Nil(t, err)
+		tt.Equal(t, 1, v)
+		_, err = cd.Get(nil)
+		tt.NotNil(t, err)
+
+		tt.Nil(t, cd.Insert([]byte("abc"), 3))
+		v, err = cd.Get([]byte("abc"))
+		tt.Nil(t, err)
+		tt.Equal(t, 3, v)
+	}
+}
+
 func TestValLimit(t *testing.T) {
 	for _, reduced := range []bool{true, false} {
 		cd := New(reduced)
